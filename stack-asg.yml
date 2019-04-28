@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Todobackend Application
+
+Parameters:
+  ApplicationDesiredCount:
+    Type: Number
+    Description: Desired EC2 instance count
+  ApplicationSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Target subnets for EC2 instances
+  ApplicationImageId:
+    Type: String
+    Description: ECS Amazon Machine Image (AMI) ID
+
+
+Resources:
+  ApplicationCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: hyundo-cluster
+  ApplicationAutoscaling:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref ApplicationAutoscalingLaunchConfiguration
+      MinSize: 0
+      MaxSize: 4
+      DesiredCapacity: !Ref ApplicationDesiredCount
+      VPCZoneIdentifier: !Ref ApplicationSubnets
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ApplicationAutoscaling-instance
+          PropagateAtLaunch: "true"
+  ApplicationAutoscalingLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref ApplicationImageId
+      InstanceType: m5.large
+      KeyName: us-east-1
+      IamInstanceProfile: !Ref ApplicationAutoscalingInstanceProfile
+      SecurityGroups:
+        - !Ref ApplicationAutoscalingSecurityGroup
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+              --resource ApplicationAutoscalingLaunchConfiguration \
+              --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+              --resource ApplicationAutoscaling \
+              --region ${AWS::Region}
+
