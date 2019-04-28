@@ -11,6 +11,7 @@ services:
       dockerfile: Dockerfile
       target: test
   release:
+    image: 167320169321.dkr.ecr.us-east-1.amazonaws.com/hyundo/todobackend:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -20,6 +21,7 @@ services:
       MYSQL_USER: todo
       MYSQL_PASSWORD: password
   app:
+    image: 167320169321.dkr.ecr.us-east-1.amazonaws.com/hyundo/todobackend:${APP_VERSION}
     extends:
       service: release
     depends_on:
@@ -32,7 +34,7 @@ services:
       interval: 3s
       retries: 10
     ports:
-      - 8000:8000
+      - 8000
     command:
       - uwsgi
       - --http=0.0.0.0:8000
