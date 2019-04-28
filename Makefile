@@ -1,31 +1,19 @@
-.PHONY: test release clean version login logout publish
+.PHONY: build
+.ONESHELL:
 
-export APP_VERSION ?= $(shell git rev-parse --short HEAD)
+build:
+	@ $(if $(AWS_PROFILE),$(call assume_role))
+	packer build packer.json
 
-version:
-	@ echo '{"Version": "$(APP_VERSION)"}'
-
-login:
-	$$(aws ecr get-login --no-include-email)
-
-logout:
-	docker logout https://167320169321.dkr.ecr.us-east-1.amazonaws.com
-
-test:
-	docker-compose build --pull release
-	docker-compose build
-	docker-compose run test
-
-release:
-	docker-compose up --abort-on-container-exit migrate
-	docker-compose run app python3 manage.py collectstatic --no-input
-	docker-compose up --abort-on-container-exit acceptance
-	@ echo App running at http://$$(docker-compose port app 8000 | sed s/0.0.0.0/localhost/g)
-
-publish:
-	docker-compose push release app
-
-clean:
-	docker-compose down -v
-	docker images -q -f dangling=true -f label=application=todobackend | xargs -I ARGS docker rmi -f --no-prune ARGS
-
+# Dynamically assumes role and injects credentials into environment
+define assume_role
+  export AWS_DEFAULT_REGION=$$(aws configure get region)
+  eval $$(aws sts assume-role --role-arn=$$(aws configure get role_arn) \
+    --role-session-name=$$(aws configure get role_session_name) \
+    --query "Credentials.[ \
+        [join('=',['export AWS_ACCESS_KEY_ID',AccessKeyId])], \
+        [join('=',['export AWS_SECRET_ACCESS_KEY',SecretAccessKey])], \
+        [join('=',['export AWS_SESSION_TOKEN',SessionToken])] \
+      ]" \
+    --output text)
+endef
